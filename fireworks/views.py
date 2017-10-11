@@ -4,6 +4,9 @@ import json
 
 from django.http import HttpResponse
 from .models import Firework
+from .serializers import encode_firework
 
 def index(request):
-    return HttpResponse("Hello, world. You're at the polls index.")
+    fireworks = Firework.objects.all()
+    serialized = [encode_firework(firework) for firework in fireworks]
+    return HttpResponse(json.dumps(serialized))
