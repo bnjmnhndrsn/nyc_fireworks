@@ -2,12 +2,17 @@ from bs4 import BeautifulSoup
 import requests
 from datetime import datetime, timedelta
 import re
+import pytz
+from dateutil import parser
+from django.utils import timezone
 
 from django.core.management.base import BaseCommand, CommandError
 from fireworks.models import Firework
 
 
 TARGET_URL = 'http://www1.nyc.gov/nyc-resources/service/206/fireworks-displays'
+
+eastern = pytz.timezone('US/Eastern')
 
 class Command(BaseCommand):
     help = 'Closes the specified poll for voting'
@@ -36,16 +41,19 @@ class Command(BaseCommand):
             sponsor_name = ''
 
         return {
-            'event_at': datetime.strptime(date, '%A, %B %d, %Y, %I:%M %p'),
+            'event_at': eastern.localize(parser.parse(date)),
             'location': location,
             'sponsor': sponsor_name
         }
 
     def create_or_update_fireworks(self, data, options):
-        now = datetime.now()
+        now = timezone.now()
         upcoming_fireworks = Firework.objects.filter(event_at__gte=now, cancelled=False)
         found_firework_ids = []
         for item in data:
+            if item['event_at'] < now:
+                continue
+                
             try:
                 found = upcoming_fireworks.get(**item)
                 found_firework_ids.append(found)
