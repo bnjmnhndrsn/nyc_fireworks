@@ -9,3 +9,7 @@ class Firework(models.Model):
     event_at = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    cancelled = models.BooleanField(default=False)
+
+    def __unicode__(self):
+        return '%s by %s at %s' % (self.location, self.sponsor, self.event_at.isoformat())

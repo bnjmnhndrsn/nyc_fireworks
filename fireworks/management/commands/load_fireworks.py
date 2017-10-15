@@ -1,6 +1,6 @@
 from bs4 import BeautifulSoup
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 import re
 
 from django.core.management.base import BaseCommand, CommandError
@@ -11,35 +11,57 @@ TARGET_URL = 'http://www1.nyc.gov/nyc-resources/service/206/fireworks-displays'
 
 class Command(BaseCommand):
     help = 'Closes the specified poll for voting'
-    
+
     def get_text(self):
         r = requests.get(TARGET_URL)
         soup = BeautifulSoup(r.text, 'html.parser')
         return soup.find(class_="richtext").get_text()
-    
+
     def parse_text(self, text):
         rows = text.split('\n')[1:]
         rows = [row.strip() for row in rows if row.strip()]
         if len(rows) % 3 != 0:
             raise Error('Incorrect number of lines')
-        
+
         result = []
         for i in range(0, len(rows) - 2, 3):
             result.append(self.parse_firework(*rows[i:i+3]))
-        
+
         return result
-        
+
     def parse_firework(self, date, location, sponsor):
         try:
             sponsor_name = re.search('Sponsor: (.+)', sponsor).group(1)
         except AttributeError:
             sponsor_name = ''
-    
+
         return {
             'event_at': datetime.strptime(date, '%A, %B %d, %Y, %I:%M %p'),
             'location': location,
             'sponsor': sponsor_name
         }
+
+    def create_or_update_fireworks(self, data, options):
+        now = datetime.now()
+        upcoming_fireworks = Firework.objects.filter(event_at__gte=now, cancelled=False)
+        found_firework_ids = []
+        for item in data:
+            try:
+                found = upcoming_fireworks.get(**item)
+                found_firework_ids.append(found)
+                print 'found new firework with data %s' % item
+            except Firework.DoesNotExist:
+                print 'creating new firework with data %s' % item
+                if options['dry_run']:
+                    Firework.objects.create(**item)
+
+        not_found_fireworks = upcoming_fireworks.exclude(id__in=found_firework_ids)
+        if len(not_found_fireworks):
+            not_found_string = '\n'.join([str(firework) for firework in not_found_fireworks])
+            print 'could not find fireworks:\n%s' % not_found_string
+            if not options['dry_run']:
+                not_found_fireworks.update(cancelled=True)
+
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -53,4 +75,4 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         text = self.get_text()
         parsed = self.parse_text(text)
-        print parsed
+        self.create_or_update_fireworks(parsed, options)
