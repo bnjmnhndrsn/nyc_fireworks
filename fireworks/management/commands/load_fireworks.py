@@ -1,25 +1,29 @@
+import re
+from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
 import requests
-from datetime import datetime, timedelta
-import re
 import pytz
 from dateutil import parser
-from django.utils import timezone
 
 from django.core.management.base import BaseCommand, CommandError
-from fireworks.models import Firework
+from django.utils import timezone
 
+from fireworks.models import Firework
 
 TARGET_URL = 'http://www1.nyc.gov/nyc-resources/service/206/fireworks-displays'
 
 eastern = pytz.timezone('US/Eastern')
 
+def get_request_text():
+    r = requests.get(TARGET_URL)
+    return r.text
+        
 class Command(BaseCommand):
     help = 'Closes the specified poll for voting'
 
     def get_text(self):
-        r = requests.get(TARGET_URL)
-        soup = BeautifulSoup(r.text, 'html.parser')
+        text = get_request_text()
+        soup = BeautifulSoup(text, 'html.parser')
         return soup.find(class_="richtext").get_text()
 
     def parse_text(self, text):
