@@ -56,12 +56,14 @@ class Command(BaseCommand):
                 
             try:
                 found = upcoming_fireworks.get(**item)
-                found_firework_ids.append(found)
-                print 'found new firework with data %s' % item
+                found_firework_ids.append(found.pk)
+                print 'found existing firework %s' % found
             except Firework.DoesNotExist:
-                print 'creating new firework with data %s' % item
-                if options['dry_run']:
-                    Firework.objects.create(**item)
+                firework = Firework(**item)
+                print 'creating new firework %s' % firework
+                if not options['dry_run']:
+                    firework.save()
+                    found_firework_ids.append(firework.pk)
 
         not_found_fireworks = upcoming_fireworks.exclude(id__in=found_firework_ids)
         if len(not_found_fireworks):

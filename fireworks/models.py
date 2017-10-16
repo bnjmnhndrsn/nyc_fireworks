@@ -12,4 +12,4 @@ class Firework(models.Model):
     cancelled = models.BooleanField(default=False)
 
     def __unicode__(self):
-        return '%s by %s at %s' % (self.location, self.sponsor, self.event_at.isoformat())
+        return '<%s at %s>' % (self.location, self.event_at.isoformat())
