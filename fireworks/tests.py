@@ -67,10 +67,8 @@ class UserTestCase(TestCase):
         get_request_text_mock.return_value = sample_1
         call_command('load_fireworks', stdout=out)
         self.assertEqual(Firework.objects.count(), 3)
-        
+
         fireworks = Firework.objects.all().order_by('event_at')
         self.assertEqual(fireworks[0].location, 'Barge Off Ellis Island')
         self.assertEqual(fireworks[1].location, 'Central Park Cherry Hill')
         self.assertEqual(fireworks[2].location, 'St. John\'s University - Great Lawn')
-        
-        
