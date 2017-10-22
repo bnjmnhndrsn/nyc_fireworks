@@ -26,7 +26,7 @@ SECRET_KEY = '3ro1^5+)zvxo^*)0=jwl27h#9zh94v)@0n6(x(%32jah#41q63'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', False)
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['nyc-fireworks.herokuapp.com']
 
 
 # Application definition
