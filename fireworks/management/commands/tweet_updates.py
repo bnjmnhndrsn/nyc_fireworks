@@ -50,14 +50,12 @@ class Command(BaseCommand):
                 
     def get_message(self, prefix, firework):
         return '%s: %s on %s. Sponsored by %s' % (
-            prefix, firework.location, firework.event_at.strftime('%b %d at %I:%M %p'), firework.sponsor
+            prefix, firework.location, timezone.localtime(firework.event_at).strftime('%b %d at %I:%M %p'), firework.sponsor
         )
     
     def handle(self, *args, **options):
         self.options = options
-        
-        timezone.activate(eastern)
-        
+                
         new_fireworks = self.get_new_fireworks()
         cancelled_fireworks = self.get_cancelled_fireworks()
         reminder_fireworks = self.get_reminder_fireworks()
@@ -66,7 +64,9 @@ class Command(BaseCommand):
             print 'New Fireworks: %s' % len(new_fireworks)
             print 'Cancelled Fireworks: %s' % len(cancelled_fireworks)
             print 'Reminder Fireworks: %s' % len(reminder_fireworks)   
-            
+        
+        timezone.activate(eastern)
+
         for firework in new_fireworks:
             message = self.get_message('NEW', firework)
             self.tweet(message)
