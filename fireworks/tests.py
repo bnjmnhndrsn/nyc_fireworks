@@ -76,7 +76,7 @@ malformed_sample = '''
 </html>
 '''
 
-class UserTestCase(TestCase):
+class LoadFireworksTestCase(TestCase):
     @freeze_time("2017-10-15 03:04:31", tz_offset=-4)
     @mock.patch('fireworks.management.commands.load_fireworks.get_request_text')
     def test_load_fireworks_creates_firework_for_each_new_upcoming_event(self, get_request_text_mock):
@@ -145,3 +145,133 @@ class UserTestCase(TestCase):
         get_request_text_mock.return_value = malformed_sample
         with self.assertRaises(RuntimeError):
             call_command('load_fireworks', stdout=out)
+
+class TweetUpdates(TestCase):
+    @mock.patch('fireworks.management.commands.tweet_updates.tweet')
+    def test_sends_updates_for_any_fireworks_created_within_last_24_hours(self, tweet_mock):
+        out = StringIO()
+        with freeze_time("2017-10-15 03:04:31", tz_offset=-4):
+            yesterday_tweet = Firework.objects.create(
+                event_at=eastern.localize(datetime(2017, 11, 25, 21, 15)),
+                location='',
+                sponsor=''
+            )
+        
+        with freeze_time("2017-10-16 03:04:31", tz_offset=-4):
+            today_tweet = Firework.objects.create(
+                event_at=eastern.localize(datetime(2017, 11, 25, 21, 15)),
+                location='Location',
+                sponsor='Sponsor'
+            )
+        
+        with freeze_time("2017-10-16 04:04:31", tz_offset=-4):
+            call_command('tweet_updates', stdout=out)
+            calls = [mock.call('NEW: Location on Nov 25 at 09:15 PM. Sponsored by Sponsor')]
+            tweet_mock.assert_has_calls(calls)
+        
+        pass
+    
+    @mock.patch('fireworks.management.commands.tweet_updates.tweet')
+    def test_sends_updates_for_tweets_cancelled_with_last_24_hours(self, tweet_mock):
+        out = StringIO()
+        with freeze_time("2017-10-15 03:04:31", tz_offset=-4):
+            cancelled_yesterday = Firework.objects.create(
+                event_at=eastern.localize(datetime(2017, 11, 23, 21, 15)),
+                location='',
+                sponsor=''
+            )
+        
+        with freeze_time("2017-10-16 03:04:31", tz_offset=-4):
+            cancelled_today = Firework.objects.create(
+                event_at=eastern.localize(datetime(2017, 11, 25, 21, 15)),
+                location='Location',
+                sponsor='Sponsor'
+            )
+        
+        with freeze_time("2017-10-17 03:04:31", tz_offset=-4):
+            cancelled_yesterday.cancelled = True
+            cancelled_yesterday.save()
+        
+        with freeze_time("2017-10-18 03:04:31", tz_offset=-4):
+            cancelled_today.cancelled = True
+            cancelled_today.save()
+        
+        with freeze_time("2017-10-18 04:04:31", tz_offset=-4):
+            call_command('tweet_updates', stdout=out)
+            calls = [mock.call('CANCELLED: Location on Nov 25 at 09:15 PM. Sponsored by Sponsor')]
+            tweet_mock.assert_has_calls(calls)
+        
+        
+            
+    @mock.patch('fireworks.management.commands.tweet_updates.tweet')    
+    def test_sends_updates_for_reminder_tweets(self, tweet_mock):
+        out = StringIO()
+        with freeze_time("2017-10-15 03:04:31", tz_offset=-4):
+            two_weeks = Firework.objects.create(
+                event_at=eastern.localize(datetime(2017, 10, 30, 21, 15)),
+                location='Location 1',
+                sponsor='Sponsor 1'
+            )
+            one_week = Firework.objects.create(
+                event_at=eastern.localize(datetime(2017, 10, 23, 22, 15)),
+                location='Location 2',
+                sponsor='Sponsor 2'
+            )
+            three_days = Firework.objects.create(
+                event_at=eastern.localize(datetime(2017, 10, 19, 23, 15)),
+                location='Location 3',
+                sponsor='Sponsor 3'
+            )
+            one_day = Firework.objects.create(
+                event_at=eastern.localize(datetime(2017, 10, 17, 20, 15)),
+                location='Location 4',
+                sponsor='Sponsor 4'
+            )
+            today = Firework.objects.create(
+                event_at=eastern.localize(datetime(2017, 10, 16, 21, 30)),
+                location='Location 5',
+                sponsor='Sponsor 5'
+            )
+            
+        with freeze_time("2017-10-16 04:04:31", tz_offset=-4):
+            call_command('tweet_updates', stdout=out)
+            calls = [
+                mock.call('REMINDER: Location 5 on Oct 16 at 09:30 PM. Sponsored by Sponsor 5'),
+                mock.call('REMINDER: Location 4 on Oct 17 at 08:15 PM. Sponsored by Sponsor 4'),
+                mock.call('REMINDER: Location 3 on Oct 19 at 11:15 PM. Sponsored by Sponsor 3'),
+                mock.call('REMINDER: Location 2 on Oct 23 at 10:15 PM. Sponsored by Sponsor 2'),
+                mock.call('REMINDER: Location 1 on Oct 30 at 09:15 PM. Sponsored by Sponsor 1')
+            ]
+            tweet_mock.assert_has_calls(calls)
+            
+    @mock.patch('fireworks.twitter.tweet')            
+    def test_can_multiple_updates_at_same_time(self, tweet_mock):
+        out = StringIO()
+        with freeze_time("2017-10-15 03:04:31", tz_offset=-4):
+            reminder = Firework.objects.create(
+                event_at=eastern.localize(datetime(2017, 10, 30, 21, 15)),
+                location='Location 1',
+                sponsor='Sponsor 1'
+            )
+            cancelled = Firework.objects.create(
+                event_at=eastern.localize(datetime(2017, 10, 30, 21, 15)),
+                location='Location 2',
+                sponsor='Sponsor 2'
+            )
+            
+        with freeze_time("2017-10-16 04:04:31", tz_offset=-4):     
+            cancelled.cancelled = True
+            cancelled.save()       
+            new_firework = Firework.objects.create(
+                event_at=eastern.localize(datetime(2017, 10, 30, 21, 15)),
+                location='Location 3',
+                sponsor='Sponsor 3'
+            )
+            
+            call_command('tweet_updates', stdout=out)
+            calls = [
+                mock.call('NEW: Location 3 on Oct 30 at 09:15 PM. Sponsored by Sponsor 3'),
+                mock.call('CANCELLED: Location 2 on Oct 30 at 09:15 PM. Sponsored by Sponsor 2'),
+                mock.call('REMINDER: Location 1 on Oct 30 at 09:15 PM. Sponsored by Sponsor 1')
+            ]
+            tweet_mock.assert_has_calls(calls)
