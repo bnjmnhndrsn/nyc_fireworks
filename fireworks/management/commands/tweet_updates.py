@@ -1,0 +1,105 @@
+import datetime
+import time
+import pytz
+
+from django.core.management.base import BaseCommand, CommandError
+from django.utils import timezone
+from django.db.models import Q
+
+from fireworks.models import Firework
+from fireworks.twitter import tweet
+
+eastern = pytz.timezone('US/Eastern')
+
+def get_est_tz_bounds_in_utc():
+    today = timezone.now().astimezone(eastern)
+    beginning = today.replace(hour=0,minute=0,second=0,microsecond=0)
+    end = today.replace(hour=23,minute=59,second=59,microsecond=999)
+    return [beginning.astimezone(pytz.UTC), end.astimezone(pytz.UTC)]
+    
+
+class Command(BaseCommand):
+    help = 'Tweet out upcoming fireworks'
+    
+    REMINDER_INTERVALS = (14, 7, 3, 1, 0)
+    
+    def tweet(self, message, options):
+        if options['dry_run']:
+            print message
+        else:
+            tweet(message)
+            if options['delay']:
+                time.sleep(options['delay'])
+    
+    def add_arguments(self, parser):
+        parser.add_argument(
+            '--dry-run',
+            action='store_true',
+            dest='dry_run',
+            default=False,
+            help='Print out tweets instead of actually tweeting',
+        )
+        
+        parser.add_argument(
+            '--delay',
+            dest='delay',
+            default=0,
+            type=int,
+            help='Delays after calling tweet',
+        )
+    
+    def get_reminder_fireworks(self):
+        today = timezone.now()
+        time_query = Q()
+        bounds = get_est_tz_bounds_in_utc()
+        for interval in self.REMINDER_INTERVALS:
+            start = bounds[0] + datetime.timedelta(days=interval)
+            end = bounds[1] + datetime.timedelta(days=interval + 1)
+            time_query = time_query | Q(event_at__gte=start, event_at__lte=end)
+        
+        return list(Firework.objects.filter(cancelled=False).filter(time_query).order_by('event_at'))            
+
+    def get_new_fireworks(self):
+        today = timezone.now()
+        fireworks = Firework.objects.filter(cancelled=False, created_at__gte=today - datetime.timedelta(days=1)).order_by('event_at')
+        return list(fireworks)
+    
+    def get_cancelled_fireworks(self):
+        today = timezone.now()
+        fireworks = Firework.objects.filter(cancelled=True, updated_at__gte=today - datetime.timedelta(days=1)).order_by('event_at')
+        return list(fireworks)
+                
+    def get_message(self, prefix, firework):
+        return '%s: %s on %s. Sponsored by %s' % (
+            prefix, firework.location, timezone.localtime(firework.event_at).strftime('%b %d at %I:%M %p'), firework.sponsor
+        )
+    
+    def handle(self, *args, **options):        
+        new_fireworks = self.get_new_fireworks()
+        cancelled_fireworks = self.get_cancelled_fireworks()
+        reminder_fireworks = self.get_reminder_fireworks()
+        
+        if options['verbosity'] > 1:
+            print 'New Fireworks: %s' % len(new_fireworks)
+            print 'Cancelled Fireworks: %s' % len(cancelled_fireworks)
+            print 'Reminder Fireworks: %s' % len(reminder_fireworks)   
+        
+        # NOTE: querysets must be evaluated before this is called because it changes how they evaluate
+        timezone.activate(eastern) 
+        
+        for firework in new_fireworks:            
+            message = self.get_message('NEW', firework)
+            self.tweet(message, options)
+        
+        for firework in cancelled_fireworks:
+            message = self.get_message('CANCELLED', firework)
+            self.tweet(message, options)
+        
+        for firework in reminder_fireworks:
+            message = self.get_message('REMINDER', firework)
+            self.tweet(message, options)
+        
+        timezone.deactivate() 
+
+        
+        

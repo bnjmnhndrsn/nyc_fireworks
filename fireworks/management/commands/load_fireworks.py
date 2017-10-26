@@ -23,8 +23,8 @@ def get_request_text():
 class Command(BaseCommand):
     help = 'Closes the specified poll for voting'
 
-    def _log(self, text):
-        if self.options['verbosity'] > 1:
+    def _log(self, text, options):
+        if options['verbosity'] > 1:
             print text
 
     def get_text(self):
@@ -61,7 +61,7 @@ class Command(BaseCommand):
             'sponsor': sponsor_name
         }
 
-    def create_or_update_fireworks(self, data):
+    def create_or_update_fireworks(self, data, options):
         now = timezone.now()
         upcoming_fireworks = Firework.objects.filter(event_at__gte=now, cancelled=False)
         found_firework_ids = []
@@ -72,19 +72,19 @@ class Command(BaseCommand):
             try:
                 found = upcoming_fireworks.get(**item)
                 found_firework_ids.append(found.pk)
-                self._log('found existing firework %s' % found)
+                self._log('found existing firework %s' % found, options)
             except Firework.DoesNotExist:
                 firework = Firework(**item)
-                self._log('creating new firework %s' % firework)
-                if not self.options['dry_run']:
+                self._log('creating new firework %s' % firework, options)
+                if not options['dry_run']:
                     firework.save()
                     found_firework_ids.append(firework.pk)
 
         not_found_fireworks = upcoming_fireworks.exclude(id__in=found_firework_ids)
         if len(not_found_fireworks):
             not_found_string = '\n'.join([str(firework) for firework in not_found_fireworks])
-            self._log('could not find fireworks:\n%s' % not_found_string)
-            if not self.options['dry_run']:
+            self._log('could not find fireworks:\n%s' % not_found_string, options)
+            if not options['dry_run']:
                 not_found_fireworks.update(cancelled=True)
 
 
@@ -98,7 +98,6 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        self.options = options
         text = self.get_text()
         parsed = self.parse_text(text)
-        self.create_or_update_fireworks(parsed)
+        self.create_or_update_fireworks(parsed, options)
