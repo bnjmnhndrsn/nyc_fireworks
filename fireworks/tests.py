@@ -146,7 +146,7 @@ class LoadFireworksTestCase(TestCase):
         with self.assertRaises(RuntimeError):
             call_command('load_fireworks', stdout=out)
 
-class TweetUpdates(TestCase):
+class TweetUpdatesTestCase(TestCase):
     @mock.patch('fireworks.management.commands.tweet_updates.tweet')
     def test_sends_updates_for_any_fireworks_created_within_last_24_hours(self, tweet_mock):
         out = StringIO()
