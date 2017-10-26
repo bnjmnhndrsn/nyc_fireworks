@@ -20,9 +20,10 @@ jobs:
     steps:
       - checkout
       - name: Set up DB
+        command: |
+          psql -c 'CREATE DATABASE test_db;'
+          bundle exec rake db:migrate
         environment:
-          command: |
-            psql -c 'CREATE DATABASE test_db;'
           DATABASE_URL: "postgres://ubuntu@localhost:5432/test_db"
 
       # Download and cache dependencies
