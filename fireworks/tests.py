@@ -275,3 +275,15 @@ class TweetUpdates(TestCase):
                 mock.call('REMINDER: Location 1 on Oct 30 at 09:15 PM. Sponsored by Sponsor 1')
             ]
             tweet_mock.assert_has_calls(calls)
+
+        @freeze_time("2017-10-15 03:04:31", tz_offset=-4)
+        @mock.patch('fireworks.twitter.tweet')            
+        def test_trucates_long_content(self, tweet_mock):
+            out = StringIO()
+            firework = Firework.objects.create(
+                event_at=eastern.localize(datetime(2017, 10, 30, 21, 15)),
+                location='Location' * 100,
+                sponsor='Sponsor 1'
+            )
+            call_command('tweet_updates', stdout=out)
+            self.assertEqual(len(expect(contents.getvalue())), 142)
