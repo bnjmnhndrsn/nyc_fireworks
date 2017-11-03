@@ -20,17 +20,24 @@ class Firework(models.Model):
         return '%s at %s' % (self.location, self.event_at.isoformat())
         
     def get_new_tweet_text(self):
-        return 'New fireworks! %s on %s' % (
+        timezone.activate(eastern)
+        text = 'New fireworks! %s on %s' % (
             self.location, timezone.localtime(self.event_at).strftime('%b %d at %I:%M %p')
         )
+        timezone.deactivate()
+        return text
     
     def get_cancelled_tweet_text(self):
-        return 'Cancelled! No fireworks at %s on %s' % (
+        timezone.activate(eastern)
+        text = 'Cancelled! No fireworks at %s on %s' % (
             self.location, timezone.localtime(self.event_at).strftime('%b %d at %I:%M %p')
         )
+        timezone.deactivate()
+        return text
     
-    def get_update_tweet_text(self):
+    def get_reminder_tweet_text(self):
         days = (self.event_at - timezone.now()).days
+        timezone.activate(eastern)
         localized_time = timezone.localtime(self.event_at)
         
         if days == 14:
@@ -49,9 +56,10 @@ class Firework(models.Model):
             prefix = localized_time.strftime('Fireworks on %A!')
             strftime_format = 'at %I:%M %p'
             
-        return '%s %s %s' % (
+        text = '%s %s %s' % (
             prefix, self.location, localized_time.strftime(strftime_format)
         )
+        timezone.deactivate()
         
         
         

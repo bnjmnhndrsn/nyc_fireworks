@@ -8,6 +8,7 @@ import pytz
 from django.test import TestCase
 from django.core.management import call_command
 from django.utils.six import StringIO
+from django.utils import timezone
 
 from fireworks.models import Firework
 
@@ -166,10 +167,9 @@ class TweetUpdatesTestCase(TestCase):
         
         with freeze_time("2017-10-16 04:04:31", tz_offset=-4):
             call_command('tweet_updates', stdout=out)
-            calls = [mock.call('NEW: Location on Nov 25 at 09:15 PM. Sponsored by Sponsor')]
+            calls = [mock.call(today_tweet.get_new_tweet_text())]
             tweet_mock.assert_has_calls(calls)
         
-        pass
     
     @mock.patch('fireworks.management.commands.tweet_updates.tweet')
     def test_sends_updates_for_tweets_cancelled_with_last_24_hours(self, tweet_mock):
@@ -198,7 +198,7 @@ class TweetUpdatesTestCase(TestCase):
         
         with freeze_time("2017-10-18 04:04:31", tz_offset=-4):
             call_command('tweet_updates', stdout=out)
-            calls = [mock.call('CANCELLED: Location on Nov 25 at 09:15 PM. Sponsored by Sponsor')]
+            calls = [mock.call(cancelled_today.get_cancelled_tweet_text())]
             tweet_mock.assert_has_calls(calls)
         
         
@@ -236,11 +236,11 @@ class TweetUpdatesTestCase(TestCase):
         with freeze_time("2017-10-16 04:04:31", tz_offset=-4):
             call_command('tweet_updates', stdout=out)
             calls = [
-                mock.call('REMINDER: Location 5 on Oct 16 at 09:30 PM. Sponsored by Sponsor 5'),
-                mock.call('REMINDER: Location 4 on Oct 17 at 08:15 PM. Sponsored by Sponsor 4'),
-                mock.call('REMINDER: Location 3 on Oct 19 at 11:15 PM. Sponsored by Sponsor 3'),
-                mock.call('REMINDER: Location 2 on Oct 23 at 10:15 PM. Sponsored by Sponsor 2'),
-                mock.call('REMINDER: Location 1 on Oct 30 at 09:15 PM. Sponsored by Sponsor 1')
+                mock.call(today.get_reminder_tweet_text()),
+                mock.call(one_day.get_reminder_tweet_text()),
+                mock.call(three_days.get_reminder_tweet_text()),
+                mock.call(one_week.get_reminder_tweet_text()),
+                mock.call(two_weeks.get_reminder_tweet_text())
             ]
             tweet_mock.assert_has_calls(calls)
             
@@ -269,11 +269,13 @@ class TweetUpdatesTestCase(TestCase):
             )
             
             call_command('tweet_updates', stdout=out)
+            
             calls = [
-                mock.call('NEW: Location 3 on Oct 30 at 09:15 PM. Sponsored by Sponsor 3'),
-                mock.call('CANCELLED: Location 2 on Oct 30 at 09:15 PM. Sponsored by Sponsor 2'),
-                mock.call('REMINDER: Location 1 on Oct 30 at 09:15 PM. Sponsored by Sponsor 1')
+                mock.call(new_firework.get_new_tweet_text()),
+                mock.call(cancelled.get_cancelled_tweet_text()),
+                mock.call(reminder.get_reminder_tweet_text())
             ]
+            timezone.deactivate()
             tweet_mock.assert_has_calls(calls)
 
         @freeze_time("2017-10-15 03:04:31", tz_offset=-4)
