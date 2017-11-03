@@ -53,13 +53,14 @@ class Firework(models.Model):
             prefix = 'Fireworks tomorrow!'
             strftime_format = 'at %I:%M %p'
         else: 
-            prefix = localized_time.strftime('Fireworks on %A!')
+            prefix = localized_time.strftime('Fireworks %A!')
             strftime_format = 'at %I:%M %p'
             
         text = '%s %s %s' % (
             prefix, self.location, localized_time.strftime(strftime_format)
         )
         timezone.deactivate()
+        return text
         
         
         
