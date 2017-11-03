@@ -68,11 +68,6 @@ class Command(BaseCommand):
         today = timezone.now()
         fireworks = Firework.objects.filter(cancelled=True, updated_at__gte=today - datetime.timedelta(days=1)).order_by('event_at')
         return list(fireworks)
-                
-    def get_message(self, prefix, firework):
-        return '%s: %s on %s. Sponsored by %s' % (
-            prefix, firework.location, timezone.localtime(firework.event_at).strftime('%b %d at %I:%M %p'), firework.sponsor
-        )
     
     def handle(self, *args, **options):        
         new_fireworks = self.get_new_fireworks()
@@ -82,21 +77,18 @@ class Command(BaseCommand):
         if options['verbosity'] > 1:
             print 'New Fireworks: %s' % len(new_fireworks)
             print 'Cancelled Fireworks: %s' % len(cancelled_fireworks)
-            print 'Reminder Fireworks: %s' % len(reminder_fireworks)   
-        
-        # NOTE: querysets must be evaluated before this is called because it changes how they evaluate
-        timezone.activate(eastern) 
+            print 'Reminder Fireworks: %s' % len(reminder_fireworks)
         
         for firework in new_fireworks:            
-            message = self.get_message('NEW', firework)
+            message = firework.get_new_tweet_text()
             self.tweet(message, options)
         
         for firework in cancelled_fireworks:
-            message = self.get_message('CANCELLED', firework)
+            message = firework.get_cancelled_tweet_text()
             self.tweet(message, options)
         
         for firework in reminder_fireworks:
-            message = self.get_message('REMINDER', firework)
+            message = firework.get_reminder_tweet_text()
             self.tweet(message, options)
         
         timezone.deactivate() 
