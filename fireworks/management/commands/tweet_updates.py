@@ -21,10 +21,16 @@ def get_est_tz_bounds_in_utc():
 class Command(BaseCommand):
     help = 'Tweet out upcoming fireworks'
     
-    REMINDER_INTERVALS = (14, 7, 3, 1, 0)
+    REMINDER_INTERVALS = (7, 3, 1, 0)
     
-    def tweet(self, message):
-        schedule_tweet.delay(message)
+    def tweet(self, message, **kwargs):
+        self.total_tweets += 1
+        if not 'eta' in kwargs:
+            kwargs['countdown'] = self.total_tweets * 10
+        
+        print message
+        print kwargs
+        schedule_tweet.apply_async((message,), **kwargs)
     
     def get_reminder_fireworks(self):
         today = timezone.now()
@@ -51,13 +57,14 @@ class Command(BaseCommand):
         new_fireworks = self.get_new_fireworks()
         cancelled_fireworks = self.get_cancelled_fireworks()
         reminder_fireworks = self.get_reminder_fireworks()
+        self.total_tweets = 0
         
         if options['verbosity'] > 1:
             print 'New Fireworks: %s' % len(new_fireworks)
             print 'Cancelled Fireworks: %s' % len(cancelled_fireworks)
             print 'Reminder Fireworks: %s' % len(reminder_fireworks)
         
-        for firework in new_fireworks:            
+        for firework in new_fireworks: 
             message = firework.get_new_tweet_text()
             self.tweet(message)
         
@@ -66,8 +73,22 @@ class Command(BaseCommand):
             self.tweet(message)
         
         for firework in reminder_fireworks:
-            message = firework.get_reminder_tweet_text()
-            self.tweet(message)
+            days = (firework.event_at - timezone.now()).days
+            messages = []
+            messages.append(
+                (firework.get_morning_reminder_tweet_text(days), {})
+            )
+            if days == 0:
+                messages.append((
+                    firework.get_one_hour_reminder_text(),
+                    {'eta': firework.event_at - datetime.timedelta(hours=1)}
+                ))
+                messages.append((
+                    firework.get_now_reminder_text(),
+                    {'eta': firework.event_at}
+                ))
+            for message in messages:
+                self.tweet(message[0], **message[1])
         
         timezone.deactivate() 
 
