@@ -7,7 +7,7 @@ from django.utils import timezone
 from django.db.models import Q
 
 from fireworks.models import Firework
-from fireworks.twitter import tweet
+from fireworks.tasks import schedule_tweet
 
 eastern = pytz.timezone('US/Eastern')
 
@@ -23,30 +23,8 @@ class Command(BaseCommand):
     
     REMINDER_INTERVALS = (14, 7, 3, 1, 0)
     
-    def tweet(self, message, options):
-        if options['dry_run']:
-            print message
-        else:
-            tweet(message)
-            if options['delay']:
-                time.sleep(options['delay'])
-    
-    def add_arguments(self, parser):
-        parser.add_argument(
-            '--dry-run',
-            action='store_true',
-            dest='dry_run',
-            default=False,
-            help='Print out tweets instead of actually tweeting',
-        )
-        
-        parser.add_argument(
-            '--delay',
-            dest='delay',
-            default=0,
-            type=int,
-            help='Delays after calling tweet',
-        )
+    def tweet(self, message):
+        schedule_tweet.delay(message)
     
     def get_reminder_fireworks(self):
         today = timezone.now()
@@ -81,15 +59,15 @@ class Command(BaseCommand):
         
         for firework in new_fireworks:            
             message = firework.get_new_tweet_text()
-            self.tweet(message, options)
+            self.tweet(message)
         
         for firework in cancelled_fireworks:
             message = firework.get_cancelled_tweet_text()
-            self.tweet(message, options)
+            self.tweet(message)
         
         for firework in reminder_fireworks:
             message = firework.get_reminder_tweet_text()
-            self.tweet(message, options)
+            self.tweet(message)
         
         timezone.deactivate() 
 

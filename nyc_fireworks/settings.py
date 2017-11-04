@@ -113,3 +113,6 @@ USE_TZ = True
 
 # celery
 CELERY_BROKER_URL = os.environ['REDIS_URL']
+
+# Twitter
+SEND_TO_TWITTER = False or not os.environ.get('DEBUG', False)
