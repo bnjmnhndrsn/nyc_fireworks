@@ -2,7 +2,7 @@
 from __future__ import unicode_literals
 import mock
 from freezegun import freeze_time
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 
 from django.test import TestCase
@@ -148,42 +148,42 @@ class LoadFireworksTestCase(TestCase):
             call_command('load_fireworks', stdout=out)
 
 class TweetUpdatesTestCase(TestCase):
-    @mock.patch('fireworks.management.commands.tweet_updates.tweet')
+    @mock.patch('fireworks.management.commands.tweet_updates.schedule_tweet')
     def test_sends_updates_for_any_fireworks_created_within_last_24_hours(self, tweet_mock):
         out = StringIO()
         with freeze_time("2017-10-15 03:04:31", tz_offset=-4):
             yesterday_tweet = Firework.objects.create(
-                event_at=eastern.localize(datetime(2017, 11, 25, 21, 15)),
+                event_at=eastern.localize(datetime(2017, 11, 25, 21, 15)).astimezone(pytz.UTC),
                 location='',
                 sponsor=''
             )
         
         with freeze_time("2017-10-16 03:04:31", tz_offset=-4):
             today_tweet = Firework.objects.create(
-                event_at=eastern.localize(datetime(2017, 11, 25, 21, 15)),
+                event_at=eastern.localize(datetime(2017, 11, 25, 21, 15)).astimezone(pytz.UTC),
                 location='Location',
                 sponsor='Sponsor'
             )
         
         with freeze_time("2017-10-16 04:04:31", tz_offset=-4):
             call_command('tweet_updates', stdout=out)
-            calls = [mock.call(today_tweet.get_new_tweet_text())]
-            tweet_mock.assert_has_calls(calls)
+            calls = [mock.call((today_tweet.get_new_tweet_text(),), countdown=10)]
+            tweet_mock.apply_async.assert_has_calls(calls)
         
     
-    @mock.patch('fireworks.management.commands.tweet_updates.tweet')
+    @mock.patch('fireworks.management.commands.tweet_updates.schedule_tweet')
     def test_sends_updates_for_tweets_cancelled_with_last_24_hours(self, tweet_mock):
         out = StringIO()
         with freeze_time("2017-10-15 03:04:31", tz_offset=-4):
             cancelled_yesterday = Firework.objects.create(
-                event_at=eastern.localize(datetime(2017, 11, 23, 21, 15)),
+                event_at=eastern.localize(datetime(2017, 11, 23, 21, 15)).astimezone(pytz.UTC),
                 location='',
                 sponsor=''
             )
         
         with freeze_time("2017-10-16 03:04:31", tz_offset=-4):
             cancelled_today = Firework.objects.create(
-                event_at=eastern.localize(datetime(2017, 11, 25, 21, 15)),
+                event_at=eastern.localize(datetime(2017, 11, 25, 21, 15)).astimezone(pytz.UTC),
                 location='Location',
                 sponsor='Sponsor'
             )
@@ -198,63 +198,65 @@ class TweetUpdatesTestCase(TestCase):
         
         with freeze_time("2017-10-18 04:04:31", tz_offset=-4):
             call_command('tweet_updates', stdout=out)
-            calls = [mock.call(cancelled_today.get_cancelled_tweet_text())]
-            tweet_mock.assert_has_calls(calls)
+            calls = [mock.call((cancelled_today.get_cancelled_tweet_text(),), countdown=10)]
+            tweet_mock.apply_async.assert_has_calls(calls)
         
         
             
-    @mock.patch('fireworks.management.commands.tweet_updates.tweet')    
+    @mock.patch('fireworks.management.commands.tweet_updates.schedule_tweet')    
     def test_sends_updates_for_reminder_tweets(self, tweet_mock):
         out = StringIO()
         with freeze_time("2017-10-15 03:04:31", tz_offset=-4):
             two_weeks = Firework.objects.create(
-                event_at=eastern.localize(datetime(2017, 10, 30, 21, 15)),
+                event_at=eastern.localize(datetime(2017, 10, 30, 21, 15)).astimezone(pytz.UTC),
                 location='Location 1',
                 sponsor='Sponsor 1'
             )
             one_week = Firework.objects.create(
-                event_at=eastern.localize(datetime(2017, 10, 23, 22, 15)),
+                event_at=eastern.localize(datetime(2017, 10, 23, 22, 15)).astimezone(pytz.UTC),
                 location='Location 2',
                 sponsor='Sponsor 2'
             )
             three_days = Firework.objects.create(
-                event_at=eastern.localize(datetime(2017, 10, 19, 23, 15)),
+                event_at=eastern.localize(datetime(2017, 10, 19, 23, 15)).astimezone(pytz.UTC),
                 location='Location 3',
                 sponsor='Sponsor 3'
             )
             one_day = Firework.objects.create(
-                event_at=eastern.localize(datetime(2017, 10, 17, 20, 15)),
+                event_at=eastern.localize(datetime(2017, 10, 17, 20, 15)).astimezone(pytz.UTC),
                 location='Location 4',
                 sponsor='Sponsor 4'
             )
             today = Firework.objects.create(
-                event_at=eastern.localize(datetime(2017, 10, 16, 21, 30)),
+                event_at=eastern.localize(datetime(2017, 10, 16, 21, 30)).astimezone(pytz.UTC),
                 location='Location 5',
                 sponsor='Sponsor 5'
             )
             
         with freeze_time("2017-10-16 04:04:31", tz_offset=-4):
             call_command('tweet_updates', stdout=out)
-            calls = [
-                mock.call(today.get_reminder_tweet_text()),
-                mock.call(one_day.get_reminder_tweet_text()),
-                mock.call(three_days.get_reminder_tweet_text()),
-                mock.call(one_week.get_reminder_tweet_text()),
-                mock.call(two_weeks.get_reminder_tweet_text())
-            ]
-            tweet_mock.assert_has_calls(calls)
+        
+        calls = [
+            mock.call((today.get_morning_reminder_tweet_text(0),), countdown=10),
+            mock.call((today.get_one_hour_reminder_text(),), eta=today.event_at  - timedelta(hours=1)),
+            mock.call((today.get_now_reminder_text(),), eta=today.event_at),
+            mock.call((one_day.get_morning_reminder_tweet_text(1),), countdown=40),
+            mock.call((three_days.get_morning_reminder_tweet_text(3),), countdown=50),
+            mock.call((one_week.get_morning_reminder_tweet_text(7),), countdown=60),
+        ]
+        tweet_mock.apply_async.assert_has_calls(calls)
             
-    @mock.patch('fireworks.twitter.tweet')            
+    @mock.patch('fireworks.management.commands.tweet_updates.schedule_tweet')            
     def test_can_multiple_updates_at_same_time(self, tweet_mock):
         out = StringIO()
-        with freeze_time("2017-10-15 03:04:31", tz_offset=-4):
+        with freeze_time("2017-10-10 03:04:31", tz_offset=-4):
             reminder = Firework.objects.create(
-                event_at=eastern.localize(datetime(2017, 10, 30, 21, 15)),
+                event_at=eastern.localize(datetime(2017, 10, 23, 21, 15)).astimezone(pytz.UTC),
                 location='Location 1',
                 sponsor='Sponsor 1'
             )
             cancelled = Firework.objects.create(
-                event_at=eastern.localize(datetime(2017, 10, 30, 21, 15)),
+                event_at=eastern.localize(datetime(2017, 10, 30, 21, 15)).astimezone(pytz.UTC),
                 location='Location 2',
                 sponsor='Sponsor 2'
             )
@@ -263,7 +265,7 @@ class TweetUpdatesTestCase(TestCase):
             cancelled.cancelled = True
             cancelled.save()       
             new_firework = Firework.objects.create(
-                event_at=eastern.localize(datetime(2017, 10, 30, 21, 15)),
+                event_at=eastern.localize(datetime(2017, 11, 30, 21, 15)).astimezone(pytz.UTC),
                 location='Location 3',
                 sponsor='Sponsor 3'
             )
@@ -271,36 +273,37 @@ class TweetUpdatesTestCase(TestCase):
             call_command('tweet_updates', stdout=out)
             
             calls = [
-                mock.call(new_firework.get_new_tweet_text()),
-                mock.call(cancelled.get_cancelled_tweet_text()),
-                mock.call(reminder.get_reminder_tweet_text())
+                mock.call((new_firework.get_new_tweet_text(),), countdown=10),
+                mock.call((cancelled.get_cancelled_tweet_text(),), countdown=20),
+                mock.call((reminder.get_morning_reminder_tweet_text(7),), countdown=30)
             ]
             timezone.deactivate()
-            tweet_mock.assert_has_calls(calls)
+            tweet_mock.apply_async.assert_has_calls(calls)
 
         @freeze_time("2017-10-15 03:04:31", tz_offset=-4)
         @mock.patch('fireworks.twitter.tweet')            
         def test_trucates_long_content(self, tweet_mock):
             out = StringIO()
             firework = Firework.objects.create(
-                event_at=eastern.localize(datetime(2017, 10, 30, 21, 15)),
+                event_at=eastern.localize(datetime(2017, 10, 30, 21, 15)).astimezone(pytz.UTC),
                 location='Location' * 100,
                 sponsor='Sponsor 1'
             )
             call_command('tweet_updates', stdout=out)
+            print contents
             self.assertEqual(len(expect(contents.getvalue())), 142)
 
 class FireworkModelTests(TestCase):
     def test_get_new_tweet_text(self):        
         with freeze_time("2017-10-16 03:04:31", tz_offset=-4):
             today_tweet = Firework.objects.create(
-                event_at=eastern.localize(datetime(2017, 11, 25, 21, 15)),
+                event_at=eastern.localize(datetime(2017, 11, 25, 21, 15)).astimezone(pytz.UTC),
                 location='Location',
                 sponsor='Sponsor'
             )
         
         with freeze_time("2017-10-16 04:04:31", tz_offset=-4):
-            expected = 'New fireworks! Location on Nov 25 at 09:15 PM'
+            expected = 'New 🎆 announced! Location on Nov 25 at 09:15 PM sponsored by Sponsor'
             self.assertEqual(today_tweet.get_new_tweet_text(), expected)
         
     
@@ -308,7 +311,7 @@ class FireworkModelTests(TestCase):
         out = StringIO()        
         with freeze_time("2017-10-16 03:04:31", tz_offset=-4):
             cancelled_today = Firework.objects.create(
-                event_at=eastern.localize(datetime(2017, 11, 25, 21, 15)),
+                event_at=eastern.localize(datetime(2017, 11, 25, 21, 15)).astimezone(pytz.UTC),
                 location='Location',
                 sponsor='Sponsor'
             )
@@ -318,52 +321,71 @@ class FireworkModelTests(TestCase):
             cancelled_today.save()
         
         with freeze_time("2017-10-18 04:04:31", tz_offset=-4):
-            expected = 'Cancelled! No fireworks at Location on Nov 25 at 09:15 PM'
+            expected = 'Cancelled! No 🎆  at Location on Nov 25 at 09:15 PM'
             self.assertEqual(cancelled_today.get_cancelled_tweet_text(), expected)
         
         
             
     def test_get_text_for_reminder_tweets(self):
         with freeze_time("2017-10-15 03:04:31", tz_offset=-4):
-            two_weeks = Firework.objects.create(
-                event_at=eastern.localize(datetime(2017, 10, 30, 21, 15)),
-                location='Location 1',
-                sponsor='Sponsor 1'
-            )
             one_week = Firework.objects.create(
-                event_at=eastern.localize(datetime(2017, 10, 23, 22, 15)),
+                event_at=eastern.localize(datetime(2017, 10, 23, 22, 15)).astimezone(pytz.UTC),
                 location='Location 2',
                 sponsor='Sponsor 2'
             )
             three_days = Firework.objects.create(
-                event_at=eastern.localize(datetime(2017, 10, 19, 23, 15)),
+                event_at=eastern.localize(datetime(2017, 10, 19, 23, 15)).astimezone(pytz.UTC),
                 location='Location 3',
                 sponsor='Sponsor 3'
             )
             one_day = Firework.objects.create(
-                event_at=eastern.localize(datetime(2017, 10, 17, 20, 15)),
+                event_at=eastern.localize(datetime(2017, 10, 17, 20, 15)).astimezone(pytz.UTC),
                 location='Location 4',
                 sponsor='Sponsor 4'
             )
             today = Firework.objects.create(
-                event_at=eastern.localize(datetime(2017, 10, 16, 21, 30)),
+                event_at=eastern.localize(datetime(2017, 10, 16, 21, 30)).astimezone(pytz.UTC),
                 location='Location 5',
                 sponsor='Sponsor 5'
             )
             
         with freeze_time("2017-10-16 04:04:31", tz_offset=-4):
-            expected_today_text = 'Fireworks today! Location 5 at 09:30 PM'
-            self.assertEqual(expected_today_text, today.get_reminder_tweet_text())
+            expected_today_text = '🎆 today! Location 5 at 09:30 PM, sponsored by Sponsor 5'
+            self.assertEqual(expected_today_text, today.get_morning_reminder_tweet_text(0))
             
-            expected_one_day_text = 'Fireworks tomorrow! Location 4 at 08:15 PM'
-            self.assertEqual(expected_one_day_text, one_day.get_reminder_tweet_text())            
+            expected_one_day_text = '🎆 tomorrow! Location 4 at 08:15 PM, sponsored by Sponsor 4'
+            self.assertEqual(expected_one_day_text, one_day.get_morning_reminder_tweet_text(1))            
             
-            expected_three_days_text = 'Fireworks Thursday! Location 3 at 11:15 PM'
-            self.assertEqual(expected_three_days_text, three_days.get_reminder_tweet_text())
+            expected_three_days_text = '🎆 Thursday! Location 3 at 11:15 PM, sponsored by Sponsor 3'
+            self.assertEqual(expected_three_days_text, three_days.get_morning_reminder_tweet_text(3))
             
-            expected_one_week_text = 'Fireworks in 1 week! Location 2 on Oct 23 at 10:15 PM'
-            self.assertEqual(expected_one_week_text, one_week.get_reminder_tweet_text())
-            
-            expected_two_weeks_text = 'Fireworks in 2 weeks! Location 1 on Oct 30 at 09:15 PM'
-            self.assertEqual(expected_two_weeks_text, two_weeks.get_reminder_tweet_text())
+            expected_one_week_text = '🎆 in 1 week! Location 2 on Oct 23 at 10:15 PM, sponsored by Sponsor 2'
+            self.assertEqual(expected_one_week_text, one_week.get_morning_reminder_tweet_text(7))
+    
+    
+        def test_get_one_hour_reminder_text(self):
+            with freeze_time("2017-10-15 03:04:31", tz_offset=-4):
+                today = Firework.objects.create(
+                    event_at=eastern.localize(datetime(2017, 10, 16, 21, 30)).astimezone(pytz.UTC),
+                    location='Location',
+                    sponsor='Sponsor'
+                )
+                
+            with freeze_time("2017-10-16 04:04:31", tz_offset=-4):
+                expected = 'Fireworks in one hour! Location 5, 🎆 sponsored by Sponsor 5'
+                self.assertEqual(expected_today_text, today.get_one_hour_reminder_text())
+                
+
+        def test_get_now_reminder_text(self):
+            with freeze_time("2017-10-15 03:04:31", tz_offset=-4):
+                today = Firework.objects.create(
+                    event_at=eastern.localize(datetime(2017, 10, 16, 21, 30)).astimezone(pytz.UTC),
+                    location='Location',
+                    sponsor='Sponsor'
+                )
+                
+            with freeze_time("2017-10-16 04:04:31", tz_offset=-4):
+                expected = 'Fireworks in one hour! Location 5, 🎆 sponsored by Sponsor 5'
+                self.assertEqual(expected_today_text, today.get_morning_reminder_tweet_text())
+                
                         

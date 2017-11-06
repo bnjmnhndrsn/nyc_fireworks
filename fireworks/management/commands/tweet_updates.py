@@ -27,9 +27,7 @@ class Command(BaseCommand):
         self.total_tweets += 1
         if not 'eta' in kwargs:
             kwargs['countdown'] = self.total_tweets * 10
-        
-        print message
-        print kwargs
+
         schedule_tweet.apply_async((message,), **kwargs)
     
     def get_reminder_fireworks(self):

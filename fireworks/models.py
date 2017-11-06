@@ -52,7 +52,7 @@ class Firework(models.Model):
             prefix = '🎆 tomorrow!'
             strftime_format = 'at %I:%M %p'
         else: 
-            prefix = localized_time.strftime('Fireworks %A!')
+            prefix = '🎆 ' + localized_time.strftime('%A!')
             strftime_format = 'at %I:%M %p'
             
         text = '%s %s %s, sponsored by %s' % (
@@ -64,14 +64,14 @@ class Firework(models.Model):
     def get_one_hour_reminder_text(self):
         timezone.activate(eastern)
         localized_time = timezone.localtime(self.event_at)
-        return '🎆 in one hour! %s, sponsored by %s' % (
+        return 'Fireworks in one hour! %s, 🎆 sponsored by %s' % (
             self.location, self.sponsor
         )
         
     def get_now_reminder_text(self):
         timezone.activate(eastern)
         localized_time = timezone.localtime(self.event_at)
-        return '🎆 starting now! %s, sponsored by %s' % (
+        return 'Fireworks starting now! %s, 🎆 sponsored by %s' % (
             self.location, self.sponsor
         )
         
