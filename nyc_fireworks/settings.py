@@ -26,7 +26,7 @@ SECRET_KEY = '3ro1^5+)zvxo^*)0=jwl27h#9zh94v)@0n6(x(%32jah#41q63'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', False)
 
-ALLOWED_HOSTS = ['nyc-fireworks.herokuapp.com']
+ALLOWED_HOSTS = ['localhost', 'nyc-fireworks.herokuapp.com']
 
 
 # Application definition
@@ -110,3 +110,9 @@ USE_I18N = True
 USE_L10N = True
 
 USE_TZ = True
+
+# celery
+CELERY_BROKER_URL = os.environ['REDIS_URL']
+
+# Twitter
+SEND_TO_TWITTER = False or not os.environ.get('DEBUG', False)
